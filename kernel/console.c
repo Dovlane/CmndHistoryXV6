@@ -184,12 +184,22 @@ struct {
 	uint e;  // Edit index
 } input;
 
+#define SAVED_MAX 3
+char command_stack[SAVED_MAX][INPUT_BUF];
+int command_ptr = 0;
+int saved = 0;
+
+#define KEY_UP          0xE2
+#define KEY_DN          0xE3
 #define C(x)  ((x)-'@')  // Control-x
+#define S(x) ((x) + '@') // Shift-x for KEY_UP and KEY_DN
 
 void
 consoleintr(int (*getc)(void))
 {
 	int c, doprocdump = 0;
+
+	static int istorija = 1;
 
 	acquire(&cons.lock);
 	while((c = getc()) >= 0){
@@ -211,11 +221,15 @@ consoleintr(int (*getc)(void))
 				consputc(BACKSPACE);
 			}
 			break;
+		case S(KEY_UP): case S(KEY_DN):
+			istorija = !istorija;
+
 		default:
 			if(c != 0 && input.e-input.r < INPUT_BUF){
 				c = (c == '\r') ? '\n' : c;
 				input.buf[input.e++ % INPUT_BUF] = c;
-				consputc(c);
+				if (istorija)
+					consputc(c);
 				if(c == '\n' || c == C('D') || input.e == input.r+INPUT_BUF){
 					input.w = input.e;
 					wakeup(&input.r);
@@ -230,6 +244,31 @@ consoleintr(int (*getc)(void))
 	}
 }
 
+int enterIndex = 0;
+int lastIndex = 0;
+
+void copyCommand(char* copyCommand, char* originalCommand, int lastIndex, int newIndex) {
+	copyCommand[0] = '\0';
+	int index = lastIndex;
+	//do {
+	//	copyCommand[index - lastIndex] = copyCommand[index];
+	//	index++;
+	//} while (originalCommand[index] != '\0');
+	for (int i = lastIndex; i < newIndex; i++) {
+		copyCommand[i - lastIndex] = originalCommand[i];
+	}
+}
+
+void onCommandStackFull() {
+	for (int i = SAVED_MAX - 1; i >= 1; i--) {
+		//copyCommand(command_stack[i], command_stack[i - 1], 0, 128);
+		for (int i = 0; i < INPUT_BUF; i++) {
+			command_stack[i][i - lastIndex] = command_stack[i - 1][i];
+		}
+	}
+
+}
+
 int
 consoleread(struct inode *ip, char *dst, int n)
 {
@@ -239,6 +278,7 @@ consoleread(struct inode *ip, char *dst, int n)
 	iunlock(ip);
 	target = n;
 	acquire(&cons.lock);
+
 	while(n > 0){
 		while(input.r == input.w){
 			if(myproc()->killed){
@@ -259,8 +299,22 @@ consoleread(struct inode *ip, char *dst, int n)
 		}
 		*dst++ = c;
 		--n;
-		if(c == '\n')
+		if(c == '\n') {
+			enterIndex = input.r % INPUT_BUF;
 			break;
+		}
+	}
+	if (input.r == input.w && (input.r - enterIndex) % INPUT_BUF == 0) {
+		if (saved == SAVED_MAX) {
+			onCommandStackFull();
+			copyCommand(command_stack[0], input.buf, lastIndex, input.r);
+		}
+		else {
+			copyCommand(command_stack[saved], input.buf, lastIndex, input.r);
+			saved++;
+		}
+		lastIndex = input.r;
+		consputc('"');
 	}
 	release(&cons.lock);
 	ilock(ip);

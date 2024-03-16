@@ -3,6 +3,8 @@
 #include "defs.h"
 #include "kbd.h"
 
+#define S(x) ((x) + '@') // Shift-x for KEY_UP and KEY_DN
+
 int
 kbdgetc(void)
 {
@@ -35,10 +37,14 @@ kbdgetc(void)
 	shift ^= togglecode[data];
 	c = charcode[shift & (CTL | SHIFT)][data];
 	if(shift & CAPSLOCK){
-		if('a' <= c && c <= 'z')
+		if ('a' <= c && c <= 'z')
 			c += 'A' - 'a';
-		else if('A' <= c && c <= 'Z')
+		else if ('A' <= c && c <= 'Z')
 			c += 'a' - 'A';
+	}
+	if (shift == SHIFT) {
+		if (c == KEY_UP || c == KEY_DN)
+			return S(c);
 	}
 	return c;
 }

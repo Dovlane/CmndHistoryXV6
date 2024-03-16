@@ -12,7 +12,7 @@
 
 #define CAPSLOCK        (1<<3)
 #define NUMLOCK         (1<<4)
-#define SCROLLLOCK      (1<<5)
+#define SCROLLLOCK       (1<<5)
 
 #define E0ESC           (1<<6)
 
@@ -24,7 +24,7 @@
 #define KEY_LF          0xE4
 #define KEY_RT          0xE5
 #define KEY_PGUP        0xE6
-#define KEY_PGDN        0xE7
+#define KEY_PGDN        0xE
 #define KEY_INS         0xE8
 #define KEY_DEL         0xE9
 
