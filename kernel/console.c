@@ -254,7 +254,8 @@ consoleintr(int (*getc)(void))
 					consputc(c);
 				if(c == '\n' || c == C('D') || input.e == input.r+INPUT_BUF){
 					input.w = input.e;
-					copyCommand(input.r, input.e);
+					if (input.e != input.r + 1)
+						copyCommand(input.r, input.e);
 					wakeup(&input.r);
 				}
 			}
