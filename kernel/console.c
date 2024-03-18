@@ -138,15 +138,11 @@ int saved = 0;
 #define BACKSPACE 0x100
 #define KEY_UP          0xE2
 #define KEY_DN          0xE3
-#define C(x)  ((x)-'@')  // Control-x
+#define C(x)  ((x) - '@')  // Control-x
 #define S(x) ((x) + '@') // Shift-x for KEY_UP and KEY_DN
 
-int enterIndex = 0;
-int lastIndex = 0;
 
-int history_mode = 0;
 int history_color = 0;
-
 void moveCommandsUp() {
 	for (int i = SAVED_MAX - 1; i >= 1; i--) {
 		for (int j = 0; j < INPUT_BUF; j++) {
@@ -184,6 +180,37 @@ void writeCommand() {
 		consputc(c);
 	}
 	history_color = 0;
+}
+
+void moveThroughCommandHistory(int upOrDown) {
+	if (command_ptr == -1) {
+		if (upOrDown == S(KEY_UP)) {
+			if (saved >= 1) {
+				command_ptr = 0;
+				writeCommand();
+			}
+		}
+	}
+	else {
+		if (upOrDown == S(KEY_UP)) {
+			if (command_ptr + 1 < saved) {
+				command_ptr++;
+				writeCommand();
+				if (command_ptr == SAVED_MAX)
+					command_ptr = SAVED_MAX - 1;
+			}
+		}
+		else if (upOrDown == S(KEY_DN)) {
+			if (command_ptr > 0) {
+				command_ptr--;
+				writeCommand();
+			}
+			else {
+				clearCommandLine();
+				command_ptr = -1;
+			}
+		}
+	}
 }
 
 
@@ -266,43 +293,18 @@ consoleintr(int (*getc)(void))
 			if(input.e != input.w){
 				input.e--;
 				consputc(BACKSPACE);
+				command_ptr = -1;
 			}
 			break;
 		case S(KEY_UP): case S(KEY_DN):
-			if (command_ptr == -1) {
-				if (c == S(KEY_UP)) {
-					if (saved >= 1) {
-						command_ptr = 0;
-						writeCommand();
-					}
-				}
-			}
-			else {
-				if (c == S(KEY_UP)) {
-					if (command_ptr < saved) {
-						command_ptr++;
-						writeCommand();
-						if (command_ptr == SAVED_MAX)
-							command_ptr = SAVED_MAX - 1;
-					}
-				}
-				else if (c == S(KEY_DN)) {
-					if (command_ptr > 0) {
-						command_ptr--;
-						writeCommand();
-					}
-					else {
-						clearCommandLine();
-						command_ptr = -1;
-					}
-				}
-			}
+			moveThroughCommandHistory(c);
 			break;
 
 		default:
 			if(c != 0 && input.e-input.r < INPUT_BUF){
 				c = (c == '\r') ? '\n' : c;
 				input.buf[input.e++ % INPUT_BUF] = c;
+				command_ptr = -1;
 				consputc(c);
 				if(c == '\n' || c == C('D') || input.e == input.r+INPUT_BUF){
 					input.w = input.e;
