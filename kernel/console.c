@@ -194,6 +194,28 @@ int saved = 0;
 #define C(x)  ((x)-'@')  // Control-x
 #define S(x) ((x) + '@') // Shift-x for KEY_UP and KEY_DN
 
+int enterIndex = 0;
+int lastIndex = 0;
+
+void moveCommandsUp() {
+	for (int i = SAVED_MAX - 1; i >= 1; i--) {
+		for (int j = 0; j < INPUT_BUF; j++) {
+			command_stack[i][j] = command_stack[i - 1][j];
+		}
+	}
+
+}
+
+void copyCommand(int startIndex, int endIndex) {
+	moveCommandsUp();
+	command_stack[0][0] = '\0';
+	for (int i = startIndex; i < endIndex; i++) {
+		command_stack[0][i - startIndex] = input.buf[i];
+	}
+}
+
+
+
 void
 consoleintr(int (*getc)(void))
 {
@@ -232,6 +254,7 @@ consoleintr(int (*getc)(void))
 					consputc(c);
 				if(c == '\n' || c == C('D') || input.e == input.r+INPUT_BUF){
 					input.w = input.e;
+					copyCommand(input.r, input.e);
 					wakeup(&input.r);
 				}
 			}
@@ -244,30 +267,7 @@ consoleintr(int (*getc)(void))
 	}
 }
 
-int enterIndex = 0;
-int lastIndex = 0;
 
-void copyCommand(char* copyCommand, char* originalCommand, int lastIndex, int newIndex) {
-	copyCommand[0] = '\0';
-	int index = lastIndex;
-	//do {
-	//	copyCommand[index - lastIndex] = copyCommand[index];
-	//	index++;
-	//} while (originalCommand[index] != '\0');
-	for (int i = lastIndex; i < newIndex; i++) {
-		copyCommand[i - lastIndex] = originalCommand[i];
-	}
-}
-
-void onCommandStackFull() {
-	for (int i = SAVED_MAX - 1; i >= 1; i--) {
-		//copyCommand(command_stack[i], command_stack[i - 1], 0, 128);
-		for (int i = 0; i < INPUT_BUF; i++) {
-			command_stack[i][i - lastIndex] = command_stack[i - 1][i];
-		}
-	}
-
-}
 
 int
 consoleread(struct inode *ip, char *dst, int n)
@@ -300,22 +300,10 @@ consoleread(struct inode *ip, char *dst, int n)
 		*dst++ = c;
 		--n;
 		if(c == '\n') {
-			enterIndex = input.r % INPUT_BUF;
 			break;
 		}
 	}
-	if (input.r == input.w && (input.r - enterIndex) % INPUT_BUF == 0) {
-		if (saved == SAVED_MAX) {
-			onCommandStackFull();
-			copyCommand(command_stack[0], input.buf, lastIndex, input.r);
-		}
-		else {
-			copyCommand(command_stack[saved], input.buf, lastIndex, input.r);
-			saved++;
-		}
-		lastIndex = input.r;
-		consputc('"');
-	}
+
 	release(&cons.lock);
 	ilock(ip);
 
