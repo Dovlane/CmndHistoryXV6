@@ -122,7 +122,71 @@ panic(char *s)
 		;
 }
 
+#define INPUT_BUF 128
+struct {
+	char buf[INPUT_BUF];
+	uint r;  // Read index
+	uint w;  // Write index
+	uint e;  // Edit index
+} input;
+
+#define SAVED_MAX 3
+char command_stack[SAVED_MAX][INPUT_BUF];
+int command_ptr = -1;
+int saved = 0;
+
 #define BACKSPACE 0x100
+#define KEY_UP          0xE2
+#define KEY_DN          0xE3
+#define C(x)  ((x)-'@')  // Control-x
+#define S(x) ((x) + '@') // Shift-x for KEY_UP and KEY_DN
+
+int enterIndex = 0;
+int lastIndex = 0;
+
+int history_mode = 0;
+int history_color = 0;
+
+void moveCommandsUp() {
+	for (int i = SAVED_MAX - 1; i >= 1; i--) {
+		for (int j = 0; j < INPUT_BUF; j++) {
+			command_stack[i][j] = command_stack[i - 1][j];
+		}
+	}
+}
+
+void copyCommand(int startIndex, int endIndex) {
+	moveCommandsUp();
+	command_stack[0][0] = '\0';
+	for (int i = startIndex; i < endIndex; i++) {
+		command_stack[0][i - startIndex] = input.buf[i];
+	}
+}
+
+
+void clearCommandLine() {
+	while(input.e != input.w &&
+		input.buf[(input.e-1) % INPUT_BUF] != '\n'){
+		input.e--;
+		consputc(BACKSPACE);
+	}
+}
+
+void writeCommand() {
+	clearCommandLine();
+
+	history_color = 1;
+	for (int i = 0; i < INPUT_BUF; i++) {
+		char c = command_stack[command_ptr][i];
+		if (c == '\n')
+			break;
+		input.buf[input.e++ % INPUT_BUF] = c;
+		consputc(c);
+	}
+	history_color = 0;
+}
+
+
 #define CRTPORT 0x3d4
 static ushort *crt = (ushort*)P2V(0xb8000);  // CGA memory
 
@@ -130,6 +194,13 @@ static void
 cgaputc(int c)
 {
 	int pos;
+
+	static int black_on_white = 0x0700;
+	static int green_on_white = 0x0200;
+	int code_color = black_on_white;
+	if (history_color) {
+		code_color = green_on_white;
+	}
 
 	// Cursor position: col + 80*row.
 	outb(CRTPORT, 14);
@@ -142,7 +213,7 @@ cgaputc(int c)
 	else if(c == BACKSPACE){
 		if(pos > 0) --pos;
 	} else
-		crt[pos++] = (c&0xff) | 0x0700;  // black on white
+		crt[pos++] = (c&0xff) | code_color;  // black on white
 
 	if(pos < 0 || pos > 25*80)
 		panic("pos under/overflow");
@@ -176,52 +247,10 @@ consputc(int c)
 	cgaputc(c);
 }
 
-#define INPUT_BUF 128
-struct {
-	char buf[INPUT_BUF];
-	uint r;  // Read index
-	uint w;  // Write index
-	uint e;  // Edit index
-} input;
-
-#define SAVED_MAX 3
-char command_stack[SAVED_MAX][INPUT_BUF];
-int command_ptr = 0;
-int saved = 0;
-
-#define KEY_UP          0xE2
-#define KEY_DN          0xE3
-#define C(x)  ((x)-'@')  // Control-x
-#define S(x) ((x) + '@') // Shift-x for KEY_UP and KEY_DN
-
-int enterIndex = 0;
-int lastIndex = 0;
-
-void moveCommandsUp() {
-	for (int i = SAVED_MAX - 1; i >= 1; i--) {
-		for (int j = 0; j < INPUT_BUF; j++) {
-			command_stack[i][j] = command_stack[i - 1][j];
-		}
-	}
-
-}
-
-void copyCommand(int startIndex, int endIndex) {
-	moveCommandsUp();
-	command_stack[0][0] = '\0';
-	for (int i = startIndex; i < endIndex; i++) {
-		command_stack[0][i - startIndex] = input.buf[i];
-	}
-}
-
-
-
 void
 consoleintr(int (*getc)(void))
 {
 	int c, doprocdump = 0;
-
-	static int istorija = 1;
 
 	acquire(&cons.lock);
 	while((c = getc()) >= 0){
@@ -231,11 +260,7 @@ consoleintr(int (*getc)(void))
 			doprocdump = 1;
 			break;
 		case C('U'):  // Kill line.
-			while(input.e != input.w &&
-			      input.buf[(input.e-1) % INPUT_BUF] != '\n'){
-				input.e--;
-				consputc(BACKSPACE);
-			}
+			clearCommandLine();
 			break;
 		case C('H'): case '\x7f':  // Backspace
 			if(input.e != input.w){
@@ -244,24 +269,55 @@ consoleintr(int (*getc)(void))
 			}
 			break;
 		case S(KEY_UP): case S(KEY_DN):
-			istorija = !istorija;
+			if (command_ptr == -1) {
+				if (c == S(KEY_UP)) {
+					if (saved >= 1) {
+						command_ptr = 0;
+						writeCommand();
+					}
+				}
+			}
+			else {
+				if (c == S(KEY_UP)) {
+					if (command_ptr < saved) {
+						command_ptr++;
+						writeCommand();
+						if (command_ptr == SAVED_MAX)
+							command_ptr = SAVED_MAX - 1;
+					}
+				}
+				else if (c == S(KEY_DN)) {
+					if (command_ptr > 0) {
+						command_ptr--;
+						writeCommand();
+					}
+					else {
+						clearCommandLine();
+						command_ptr = -1;
+					}
+				}
+			}
+			break;
 
 		default:
 			if(c != 0 && input.e-input.r < INPUT_BUF){
 				c = (c == '\r') ? '\n' : c;
 				input.buf[input.e++ % INPUT_BUF] = c;
-				if (istorija)
-					consputc(c);
+				consputc(c);
 				if(c == '\n' || c == C('D') || input.e == input.r+INPUT_BUF){
 					input.w = input.e;
-					if (input.e != input.r + 1)
+					if (input.e != input.r + 1) { // it is not an empty line
 						copyCommand(input.r, input.e);
+						if (saved < SAVED_MAX)
+							saved++;
+					}
 					wakeup(&input.r);
 				}
 			}
 			break;
 		}
 	}
+
 	release(&cons.lock);
 	if(doprocdump) {
 		procdump();  // now call procdump() wo. cons.lock held
@@ -290,6 +346,8 @@ consoleread(struct inode *ip, char *dst, int n)
 			sleep(&input.r, &cons.lock);
 		}
 		c = input.buf[input.r++ % INPUT_BUF];
+
+		/// print input.buf[input.r % 128]
 		if(c == C('D')){  // EOF
 			if(n < target){
 				// Save ^D for next time, to make sure
