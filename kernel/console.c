@@ -151,12 +151,15 @@ void moveCommandsUp() {
 	}
 }
 
-void copyCommand(int startIndex, int endIndex) {
+void copyCommand() {
 	moveCommandsUp();
-	command_stack[0][0] = '\0';
-	for (int i = startIndex; i < endIndex; i++) {
-		command_stack[0][i - startIndex] = input.buf[i];
-	}
+	memset(command_stack[0], '\0', INPUT_BUF);
+	int ptr = 0, buffer_ptr = input.w;
+    while (buffer_ptr != input.e && ptr < INPUT_BUF)
+    {
+        char ch = input.buf[buffer_ptr++ % INPUT_BUF];
+        command_stack[0][ptr++] = (ch != '\n' ? ch : '\0');
+    }
 }
 
 
@@ -307,12 +310,12 @@ consoleintr(int (*getc)(void))
 				command_ptr = -1;
 				consputc(c);
 				if(c == '\n' || c == C('D') || input.e == input.r+INPUT_BUF){
-					input.w = input.e;
-					if (input.e != input.r + 1) { // it is not an empty line
-						copyCommand(input.r, input.e);
+					if (input.e != input.w + 1) { // it is not an empty line
+						copyCommand(input.w, input.e);
 						if (saved < SAVED_MAX)
 							saved++;
 					}
+					input.w = input.e;
 					wakeup(&input.r);
 				}
 			}
