@@ -1,7 +1,6 @@
 ABOUT:
 
-As assignment for a faculty (RAF) was to add command history in QEMU. You just need to press ALT + KEY UP or ALT + KEY DOWN to move back and forth through command history. Here is a video that shows how it works:
-
+As assignment for a faculty (RAF) was to add command history in QEMU. You just need to press ALT + KEY UP or ALT + KEY DOWN to move back and forth through command history. Short tutorial of how this programme works is named "video-tutorial".
 
 Acknowledgments for XV6 operating system are given below:
 
