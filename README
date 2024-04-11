@@ -1,3 +1,10 @@
+#About
+
+As assignment for a faculty was to add command history in QEMU. You just need to press ALT + KEY UP or ALT + KEY DOWN to move back and forth through command history. Here is a video that shows how it works:
+
+
+Acknowledgments for XV6 operating system are given below:
+
 [![Review Assignment Due Date](https://classroom.github.com/assets/deadline-readme-button-24ddc0f5d75046c5622901739e7c5dd533143b0c8e959d652212380cedb1ea36.svg)](https://classroom.github.com/a/iUiyMWYQ)
 xv6 is a re-implementation of Dennis Ritchie's and Ken Thompson's Unix
 Version 6 (v6).  xv6 loosely follows the structure and style of v6,
