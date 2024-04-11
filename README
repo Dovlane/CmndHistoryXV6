@@ -1,4 +1,4 @@
-## About
+**About**
 
 
 As assignment for a faculty was to add command history in QEMU. You just need to press ALT + KEY UP or ALT + KEY DOWN to move back and forth through command history. Here is a video that shows how it works:
